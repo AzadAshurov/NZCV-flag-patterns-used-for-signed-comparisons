@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Binary Grid Calculator</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background-color: #ffffff;
+            margin: 0;
+            padding: 20px;
+            color: #1d1d1f;
+        }
+
+        :root {
+            --cell-size: 70px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 25px;
+            align-items: center;
+        }
+
+        .select-input {
+            padding: 8px 12px;
+            font-size: 16px;
+            border-radius: 6px;
+            border: 1px solid #d2d2d7;
+            background: white;
+            cursor: pointer;
+        }
+
+        .grid-wrapper {
+            display: flex;
+            align-items: flex-end;
+            gap: 15px;
+            margin-bottom: 25px;
+            max-width: 100%;
+        }
+
+        .carry-out-box {
+            flex: 0 0 var(--cell-size);
+            width: var(--cell-size);
+            height: var(--cell-size);
+            border: 3px solid #ff3b30;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: clamp(16px, 4vw, 28px);
+            font-weight: bold;
+            color: #1d1d1f;
+            background: #fffdfd;
+            margin-bottom: 2px;
+        }
+
+        .grid {
+            display: grid;
+            gap: 0;
+            border: 2px solid #1d1d1f;
+            flex: 0 0 auto;
+        }
+
+        .cell {
+            border: 1px solid #1d1d1f;
+            width: var(--cell-size);
+            height: var(--cell-size);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: clamp(16px, 4vw, 28px);
+            font-weight: bold;
+            background: white;
+            user-select: none;
+        }
+
+        .clickable {
+            cursor: pointer;
+            transition: background 0.1s ease;
+        }
+
+        .clickable:hover,
+        .clickable:focus-visible {
+            background: #f0f0f2;
+            outline: none;
+        }
+
+        .result-row {
+            background: #fcfcfd;
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .btn {
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-run {
+            background-color: #0071e3;
+        }
+
+        .btn-run:hover {
+            background-color: #0077ed;
+        }
+
+        .btn-reset {
+            background-color: #86868b;
+        }
+
+        .btn-reset:hover {
+            background-color: #6e6e73;
+        }
+
+        .flags-container {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .flag-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-weight: 600;
+            color: #86868b;
+            font-size: 14px;
+        }
+
+        .flag-val {
+            font-size: 28px;
+            font-weight: bold;
+            margin-top: 5px;
+            transition: color 0.2s ease;
+        }
+
+        .flag-zero {
+            color: #ff3b30;
+        }
+
+        .flag-one {
+            color: #34c759;
+        }
+
+        .flags-legend {
+            margin-top: 16px;
+            color: #6e6e73;
+            font-size: 13px;
+            text-align: center;
+            line-height: 1.6;
+            max-width: 520px;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <label for="bitSelect" style="font-weight: 600;">Bits:</label>
+        <select id="bitSelect" class="select-input" onchange="initGrid()">
+            <option value="3" selected>3-Bit</option>
+            <option value="4">4-Bit</option>
+            <option value="5">5-Bit</option>
+            <option value="6">6-Bit</option>
+            <option value="7">7-Bit</option>
+            <option value="8">8-Bit</option>
+        </select>
+    </div>
+
+    <div class="grid-wrapper">
+        <div class="carry-out-box" id="carryOut" aria-label="Carry out">-</div>
+        <div class="grid" id="binaryGrid" aria-label="Binary addition grid"></div>
+    </div>
+
+    <div class="actions">
+        <button class="btn btn-run" type="button" onclick="calculateBinary()">Run</button>
+        <button class="btn btn-reset" type="button" onclick="resetCalculator()">Reset</button>
+    </div>
+
+    <div class="flags-container" aria-label="Processor flags">
+        <div class="flag-box">N<div id="flagN" class="flag-val flag-zero">0</div></div>
+        <div class="flag-box">Z<div id="flagZ" class="flag-val flag-zero">0</div></div>
+        <div class="flag-box">C<div id="flagC" class="flag-val flag-zero">0</div></div>
+        <div class="flag-box">V<div id="flagV" class="flag-val flag-zero">0</div></div>
+    </div>
+
+    <div class="flags-legend">
+        N = result sign bit · Z = result is zero · C = unsigned carry-out · V = signed overflow
+    </div>
+
+    <script>
+        let currentBits = 3;
+
+        function updateCellSize() {
+            // Keep the whole grid usable on narrow screens, including at 8 bits.
+            const availableWidth = window.innerWidth - 60;
+            const cellSize = Math.max(24, Math.min(70, Math.floor(availableWidth / (currentBits + 1))));
+            document.documentElement.style.setProperty('--cell-size', `${cellSize}px`);
+        }
+
+        function addCell(grid, id, className, value, clickable = false) {
+            const cell = document.createElement('div');
+            cell.id = id;
+            cell.className = className;
+            cell.textContent = value;
+
+            if (clickable) {
+                cell.classList.add('clickable');
+                cell.setAttribute('role', 'button');
+                cell.setAttribute('tabindex', '0');
+                cell.setAttribute('aria-label', `Toggle bit ${id}`);
+                cell.addEventListener('click', () => toggleBit(id));
+                cell.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        toggleBit(id);
+                    }
+                });
+            }
+
+            grid.appendChild(cell);
+        }
+
+        function initGrid() {
+            currentBits = Number.parseInt(document.getElementById('bitSelect').value, 10);
+            updateCellSize();
+
+            const grid = document.getElementById('binaryGrid');
+            grid.innerHTML = '';
+            grid.style.gridTemplateColumns = `repeat(${currentBits}, var(--cell-size))`;
+
+            // Row 1: Input A, displayed from most significant bit to least significant bit.
+            for (let i = currentBits - 1; i >= 0; i--) {
+                addCell(grid, `a_${i}`, 'cell', '0', true);
+            }
+
+            // Row 2: Input B.
+            for (let i = currentBits - 1; i >= 0; i--) {
+                addCell(grid, `b_${i}`, 'cell', '0', true);
+            }
+
+            // Row 3: Fixed-width result (the carry-out is displayed separately).
+            for (let i = currentBits - 1; i >= 0; i--) {
+                addCell(grid, `s_${i}`, 'cell result-row', '-', false);
+            }
+
+            resetOutputs();
+        }
+
+        function toggleBit(id) {
+            const cell = document.getElementById(id);
+            cell.textContent = cell.textContent === '0' ? '1' : '0';
+        }
+
+        function resetOutputs() {
+            document.getElementById('carryOut').textContent = '-';
+
+            updateFlagUI('flagN', 0);
+            updateFlagUI('flagZ', 0);
+            updateFlagUI('flagC', 0);
+            updateFlagUI('flagV', 0);
+
+            for (let i = 0; i < currentBits; i++) {
+                const resultCell = document.getElementById(`s_${i}`);
+                if (resultCell) resultCell.textContent = '-';
+            }
+        }
+
+        function resetCalculator() {
+            for (let i = 0; i < currentBits; i++) {
+                document.getElementById(`a_${i}`).textContent = '0';
+                document.getElementById(`b_${i}`).textContent = '0';
+            }
+            resetOutputs();
+        }
+
+        function updateFlagUI(elementId, value) {
+            const element = document.getElementById(elementId);
+            element.textContent = String(value);
+            element.className = value === 1 ? 'flag-val flag-one' : 'flag-val flag-zero';
+        }
+
+        function calculateBinary() {
+            let carry = 0;
+            let carryIntoMSB = 0;
+            const sums = new Array(currentBits).fill(0);
+
+            // Add from least significant bit to most significant bit.
+            for (let i = 0; i < currentBits; i++) {
+                const a = Number.parseInt(document.getElementById(`a_${i}`).textContent, 10);
+                const b = Number.parseInt(document.getElementById(`b_${i}`).textContent, 10);
+
+                // Save the carry entering the sign bit, before calculating that bit.
+                if (i === currentBits - 1) {
+                    carryIntoMSB = carry;
+                }
+
+                const aXorB = a ^ b;
+                const sum = aXorB ^ carry;
+                carry = (a & b) | (carry & aXorB);
+
+                sums[i] = sum;
+                document.getElementById(`s_${i}`).textContent = String(sum);
+            }
+
+            const carryOut = carry;
+            const mostSignificantResultBit = sums[currentBits - 1];
+
+            document.getElementById('carryOut').textContent = String(carryOut);
+
+            // N: the most significant bit of the fixed-width result.
+            const nFlag = mostSignificantResultBit;
+
+            // Z: set when all result bits are zero. Carry-out is intentionally ignored.
+            const zFlag = sums.every(bit => bit === 0) ? 1 : 0;
+
+            // C: carry out of the most significant bit (unsigned overflow).
+            const cFlag = carryOut;
+
+            // V: signed overflow in two's-complement addition = carry into MSB XOR carry out.
+            const vFlag = carryIntoMSB ^ carryOut;
+
+            updateFlagUI('flagN', nFlag);
+            updateFlagUI('flagZ', zFlag);
+            updateFlagUI('flagC', cFlag);
+            updateFlagUI('flagV', vFlag);
+        }
+
+        window.addEventListener('resize', updateCellSize);
+        initGrid();
+    </script>
+</body>
+</html>
